@@ -95,6 +95,39 @@ class ProfileController extends Controller
 
     }
 
+    public function get_user_preferences(Request $request){
+
+    $validator = Validator::make($request->all(), [
+        'user_id' => 'required|exists:users,id',
+    ]);
+
+    if ($validator->fails()) {
+        return response()->json([
+            'errors' => $validator->errors()->first(),
+            'status' => 401,
+        ], 401);
+    }
+
+    $preferences = User_preference::where('user_id', $request->user_id)->first();
+
+    if ($preferences) {
+        $preferences->age_min = (int) explode('-', $preferences->age_range)[0];
+        $preferences->age_max = (int) explode('-', $preferences->age_range)[1];
+        unset($preferences->age_range);
+
+        return response()->json([
+            'message' => 'User preferences retrieved successfully.',
+            'data' => $preferences,
+            'status' => 200,
+        ], 200);
+    }
+
+    return response()->json([
+        'message' => 'User preferences do not exist.',
+        'status' => 401,
+    ], 401);
+
+    }
 
     public function upload_user_images(Request $request){
 

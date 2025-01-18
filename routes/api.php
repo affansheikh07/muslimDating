@@ -34,6 +34,7 @@ Route::post('/post_profile', [ProfileController::class, 'post_profile']);
 Route::post('/post_user_preferences', [ProfileController::class, 'post_user_preferences']);
 Route::post('/upload_user_images', [ProfileController::class, 'upload_user_images']);
 Route::post('/search_profiles', [ProfileController::class, 'search_profiles']);
+Route::post('/get_user_preferences', [ProfileController::class, 'get_user_preferences']);
 
 
 Route::post('/find_matches/{userId}', [MatchingController::class, 'find_matches']);
