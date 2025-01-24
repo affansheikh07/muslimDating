@@ -16,8 +16,8 @@ class FollowController extends Controller
     public function send_follow_request(Request $request){
 
     $validator = Validator::make($request->all(), [
-        'follower_id' => 'required|exists:users,id', // The user sending the follow request
-        'followed_id' => 'required|exists:users,id', // The user being followed
+        'follower_id' => 'required|exists:users,id', 
+        'followed_id' => 'required|exists:users,id', 
     ]);
 
     if ($validator->fails()) {
@@ -34,7 +34,39 @@ class FollowController extends Controller
         ], 401);
     }
 
-    // Check if a follow request already exists
+    $followedUser = User::find($request->followed_id);
+    
+    if (!$followedUser) {
+        return response()->json([
+            'message' => 'User not found.',
+            'status' => 401,
+        ], 401);
+    }
+
+    if ($followedUser->profile_visibility == 'public') {
+        $existingFollow = Follow::where('follower_id', $request->follower_id)
+                                ->where('followed_id', $request->followed_id)
+                                ->first();
+
+        if ($existingFollow) {
+            return response()->json([
+                'message' => 'You are already following this user.',
+                'status' => 401,
+            ], 401);
+        }
+
+        Follow::create([
+            'follower_id' => $request->follower_id,
+            'followed_id' => $request->followed_id,
+            'status' => 'accepted',
+        ]);
+
+        return response()->json([
+            'message' => 'Followed successfully.',
+            'status' => 200,
+        ], 200);
+    }
+
     $existingFollow = Follow::where('follower_id', $request->follower_id)
                             ->where('followed_id', $request->followed_id)
                             ->first();
@@ -46,7 +78,6 @@ class FollowController extends Controller
         ], 401);
     }
 
-    // Create follow request with pending status
     Follow::create([
         'follower_id' => $request->follower_id,
         'followed_id' => $request->followed_id,
@@ -59,6 +90,7 @@ class FollowController extends Controller
     ], 200);
 
     }
+
 
     public function respond_to_follow_request(Request $request){
 
@@ -193,5 +225,80 @@ class FollowController extends Controller
     ], 200);
 
     }
+
+    public function unfollow(Request $request){
+
+    $followerId = auth()->id();
+    $followedId = $request->followed_id;
+
+    $validator = Validator::make($request->all(), [
+        'followed_id' => 'required|exists:users,id',
+    ]);
+
+    if ($validator->fails()) {
+        return response()->json([
+            'errors' => $validator->errors()->first(),
+            'status' => 401,
+        ], 401);
+    }
+
+    $follow = Follow::where('follower_id', $followerId)
+                    ->where('followed_id', $followedId)
+                    ->first();
+
+    if (!$follow) {
+        return response()->json([
+            'message' => 'Error, this user does not exists in your following list.',
+            'status' => 401,
+        ], 401);
+    }
+
+    $follow->delete(); // or $follow->update(['status' => 'unfollowed']); if you want to keep the record
+
+    return response()->json([
+        'message' => 'You have unfollowed this user.',
+        'status' => 200,
+    ], 200);
+
+    }
+
+    public function remove_follower(Request $request){
+
+    $followedId = auth()->id();
+    $followerId = $request->follower_id;
+
+    $validator = Validator::make($request->all(), [
+        'follower_id' => 'required|exists:users,id',
+    ]);
+
+    if ($validator->fails()) {
+        return response()->json([
+            'errors' => $validator->errors()->first(),
+            'status' => 401,
+        ], 401);
+    }
+
+    $follow = Follow::where('follower_id', $followerId)
+                    ->where('followed_id', $followedId)
+                    ->first();
+
+    if (!$follow) {
+        return response()->json([
+            'message' => 'This user is not following you.',
+            'status' => 401,
+        ], 401);
+    }
+
+    $follow->delete();
+
+    return response()->json([
+        'message' => 'You have removed this follower.',
+        'status' => 200,
+    ], 200);
+
+    }
+
+
+
 
 }

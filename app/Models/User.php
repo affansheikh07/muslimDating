@@ -20,7 +20,8 @@ class User extends Authenticatable implements JWTSubject
         'first_name',
         'email',
         'password',
-        'phone_no'
+        'phone_no',
+        'profile_visibility'
     ];
 
     public function profile()
@@ -118,5 +119,13 @@ class User extends Authenticatable implements JWTSubject
     {
         return [];
     }
+
+    public function user_images()
+    {
+        return $this->hasMany(User_image::class, 'user_id', 'id');
+    }
+
+    
+
 }
 

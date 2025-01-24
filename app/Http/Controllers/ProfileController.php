@@ -9,6 +9,7 @@ use App\Models\User;
 use App\Models\User_profile;
 use App\Models\User_image;
 use App\Models\User_preference;
+use DB;
 
 class ProfileController extends Controller
 {
@@ -151,13 +152,14 @@ class ProfileController extends Controller
     $uploadedImages = [];
 
     foreach ($images as $key => $image) {
-        // Store image
-        $path = $image->store('user_images', 'public');
+        // Move image to the public/user_images directory
+        $imageName = time() . '_' . $image->getClientOriginalName(); // Optionally add a timestamp to avoid name conflicts
+        $path = $image->move(public_path('user_images'), $imageName);
 
-        // Save image info in database
+        // Save image info in the database
         $uploadedImages[] = User_image::create([
             'user_id' => $request->user_id,
-            'image_path' => $path,
+            'image_path' => 'user_images/' . $imageName, // Store relative path for public access
             'is_profile_picture' => $key === 0, // First image as profile picture
         ]);
     }
@@ -165,51 +167,109 @@ class ProfileController extends Controller
     return response()->json([
         'message' => 'Images uploaded successfully.',
         'images' => $uploadedImages,
-        'status' => '200'
+        'status' => 200
     ],200);
 
     }
 
+
+    public function get_user_images(Request $request){
+
+    $validator = Validator::make($request->all(), [
+        'user_id' => 'required|exists:user_profiles,id', // Validate user ID
+    ]);
+
+    if ($validator->fails()) {
+        return response()->json([
+            'errors' => $validator->errors()->first(),
+            'status' => 401,
+        ], 401);
+    }
+
+    // Fetch images for the user
+    $images = User_image::where('user_id', $request->user_id)
+        ->select(['id', 'image_path', 'is_profile_picture'])
+        ->get();
+
+    // Return response
+    return response()->json([
+        'message' => 'User images fetched successfully.',
+        'status' => 200,
+        'data' => $images,
+    ], 200);
+
+    }
+
+
     public function search_profiles(Request $request){
 
+    $viewerId = auth()->id();
+
+    Cache::forget('search_profiles_' . md5(json_encode($request->all())));
     $cacheKey = 'search_profiles_' . md5(json_encode($request->all()));
 
     $profiles = Cache::remember($cacheKey, 3600, function () use ($request) {
-
         $query = User_profile::query()
-            ->select(['id', 'user_id', 'age', 'location', 'gender', 'interests', 'bio'])
+            ->select([
+                'user_id', 'age', 'location', 'gender', 'interests', 'bio', 
+                'ethnicity', 'height', 'martial_status', 'children', 'education', 
+                'profession', 'religion', 'religious_sector', 'personality'
+            ])
             ->with(['user:id,first_name', 'user.images:id,user_id,image_path,is_profile_picture']);
 
         if ($request->has('age_min') && $request->has('age_max')) {
             $query->whereBetween('age', [$request->age_min, $request->age_max]);
+        } else {
+            return collect([]); // Return an empty collection if no age range is provided
         }
 
-        if ($request->has('location')) {
-            $query->where('location', 'like', '%' . $request->location . '%');
-        }
+        $filters = [
+            'location' => fn($q, $value) => $q->where('location', 'like', '%' . $value . '%'),
+            'interests' => fn($q, $value) => $q->where('interests', 'like', '%' . $value . '%'),
+            'gender' => fn($q, $value) => $q->where('gender', $value),
+            'martial_status' => fn($q, $value) => $q->where('martial_status', $value),
+        ];
 
-        if ($request->has('interests')) {
-            $query->where('interests', 'like', '%' . $request->interests . '%');
-        }
-
-        if ($request->has('gender')) {
-            $query->where('gender', $request->gender);
-        }
-
-        if ($request->has('martial_status')) {
-            $query->where('martial_status', $request->martial_status);
+        foreach ($filters as $key => $filter) {
+            if ($request->filled($key)) {
+                $filter($query, $request->get($key));
+            }
         }
 
         return $query->paginate(10);
     });
 
+    $profiles->getCollection()->transform(function ($profile) use ($viewerId) {
+        if (isset($profile->user)) {
+            // Add already_followed and already_liked attributes
+            $alreadyFollowed = DB::table('follows')
+                ->where('follower_id', $viewerId)
+                ->where('followed_id', $profile->user_id)
+                ->exists();
+
+            $alreadyLiked = DB::table('likes')
+                ->where('user_id', $viewerId)
+                ->where('liked_user_id', $profile->user_id)
+                ->exists();
+
+            // Merge user data into profile and add attributes
+            $profile = array_merge($profile->toArray(), $profile->user->toArray());
+            $profile['already_followed'] = $alreadyFollowed;
+            $profile['already_liked'] = $alreadyLiked;
+
+            unset($profile['user']);
+        }
+        return $profile;
+    });
+
     return response()->json([
         'message' => 'Profiles fetched successfully.',
-        'status' => '200',
+        'status' => 200,
         'data' => $profiles,
     ]);
 
     }
+
 
 
 }

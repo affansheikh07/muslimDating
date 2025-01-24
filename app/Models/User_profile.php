@@ -34,12 +34,12 @@ class User_profile extends Model
 
     public function images()
     {
-        return $this->hasMany(UserImage::class, 'user_id');
+        return $this->hasMany(User_image::class, 'user_id');
     }
 
     public function profilePicture()
     {
-        return $this->hasOne(UserImage::class, 'user_id')->where('is_profile_picture', true);
+        return $this->hasOne(User_image::class, 'user_id')->where('is_profile_picture', true);
     }
 
 }

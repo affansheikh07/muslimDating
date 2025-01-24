@@ -6,16 +6,18 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
 use App\Models\User;
 use App\Models\User_profile;
-use App\Models\User_image;
+use App\Models\Follow;
 use App\Models\User_preference;
 use App\Models\Like;
 
 class MatchingController extends Controller
 {
     
-    public function find_matches($userId){
+    public function find_matches(Request $request){
 
-    $user_profile = User_profile::where('user_id', $userId)->first();
+    $viewerId = auth()->id(); 
+
+    $user_profile = User_profile::where('user_id', $viewerId)->first();
     if (!$user_profile) {
         return response()->json([
             'message' => 'User profile not found.',
@@ -23,7 +25,7 @@ class MatchingController extends Controller
         ], 401);
     }
 
-    $user_preference = User_preference::where('user_id', $userId)->first();
+    $user_preference = User_preference::where('user_id', $viewerId)->first();
     if (!$user_preference) {
         return response()->json([
             'message' => 'User preferences not set.',
@@ -39,7 +41,7 @@ class MatchingController extends Controller
                  ->where('user_images.is_profile_picture', '=', 1);
         })
         ->where('user_profiles.gender', $oppositeGender)
-        ->where('users.id', '!=', $userId);
+        ->where('users.id', '!=', $viewerId);
 
     if ($user_preference) {
         if ($user_preference->religion) {
@@ -60,21 +62,39 @@ class MatchingController extends Controller
         }
     }
 
-    $matches = $query->select(
-            'users.*',
-            'user_profiles.*',
-            'user_images.image_path as profile_image'
-        )
-        ->distinct()
-        ->get();
+    $matches = $query->with(['user_images' => function ($query) {
+        $query->select('id', 'user_id', 'image_path', 'is_profile_picture');
+    }])
+    ->select('users.*', 'user_profiles.*')
+    ->distinct()
+    ->get();
+
+    $matches->transform(function ($match) use ($viewerId) {
+        $match['already_followed'] = Follow::where('follower_id', $viewerId)
+            ->where('followed_id', $match->user_id)
+            ->where('status', 'accepted')
+            ->exists();
+
+        $match['already_liked'] = Like::where('user_id', $viewerId)
+            ->where('liked_user_id', $match->user_id)
+            ->exists();
+
+        $match['images'] = $match->user_images;
+        unset($match->user_images);
+        return $match;
+    });
 
     return response()->json([
         'message' => 'Matches found successfully.',
         'matches' => $matches,
         'status' => 200,
     ], 200);
-
+    
     }
+
+    
+
+
 
     public function like_user(Request $request)
 {
@@ -108,7 +128,7 @@ class MatchingController extends Controller
 
     return response()->json([
         'message' => 'User liked successfully.',
-        'status' => '200',
+        'status' => 200,
     ], 200);
 
     }
@@ -142,7 +162,7 @@ class MatchingController extends Controller
 
     return response()->json([
         'liked_profiles' => $likedProfiles,
-        'status' => '200',
+        'status' => 200,
     ]);
 
     }

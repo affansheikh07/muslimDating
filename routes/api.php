@@ -28,16 +28,29 @@ Route::middleware('auth:sanctum')->get('/user', function (Request $request) {
 
 Route::post('/register_user', [UserController::class, 'register_user']);
 Route::post('/login_user', [UserController::class, 'login_user']);
-Route::post('/fetch_user_by_id/{id}', [UserController::class, 'fetch_user_by_id']);
+
+Route::middleware('auth:api')->group(function () {
+    Route::post('/fetch_user_by_id/{id}', [UserController::class, 'fetch_user_by_id']);
+    Route::post('/search_profiles', [ProfileController::class, 'search_profiles']);
+    Route::post('/find_matches', [MatchingController::class, 'find_matches']);
+    Route::post('/update_profile_visibility', [UserController::class, 'update_profile_visibility']);
+    Route::post('/unfollow', [FollowController::class, 'unfollow']);
+    Route::post('/remove_follower', [FollowController::class, 'remove_follower']);
+    Route::post('/report_user', [UserController::class, 'report_user']);
+    Route::post('/block_user', [UserController::class, 'block_user']);
+    Route::post('/unblock_user', [UserController::class, 'unblock_user']);
+
+});
 
 Route::post('/post_profile', [ProfileController::class, 'post_profile']);
 Route::post('/post_user_preferences', [ProfileController::class, 'post_user_preferences']);
 Route::post('/upload_user_images', [ProfileController::class, 'upload_user_images']);
-Route::post('/search_profiles', [ProfileController::class, 'search_profiles']);
+
 Route::post('/get_user_preferences', [ProfileController::class, 'get_user_preferences']);
+Route::post('/get_user_images', [ProfileController::class, 'get_user_images']);
+Route::post('/update_user_images', [ProfileController::class, 'update_user_images']);
 
 
-Route::post('/find_matches/{userId}', [MatchingController::class, 'find_matches']);
 Route::post('/like_user', [MatchingController::class, 'like_user']);
 Route::post('/get_liked_profiles', [MatchingController::class, 'get_liked_profiles']);
 
