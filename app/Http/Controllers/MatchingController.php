@@ -14,8 +14,8 @@ class MatchingController extends Controller
 {
     
     public function find_matches(Request $request){
-
-    $viewerId = auth()->id(); 
+        
+    $viewerId = auth()->id();
 
     $user_profile = User_profile::where('user_id', $viewerId)->first();
     if (!$user_profile) {
@@ -38,7 +38,7 @@ class MatchingController extends Controller
     $query = User::join('user_profiles', 'users.id', '=', 'user_profiles.user_id')
         ->leftJoin('user_images', function ($join) {
             $join->on('users.id', '=', 'user_images.user_id')
-                 ->where('user_images.is_profile_picture', '=', 1);
+                ->where('user_images.is_profile_picture', '=', 1);
         })
         ->where('user_profiles.gender', $oppositeGender)
         ->where('users.id', '!=', $viewerId);
@@ -65,15 +65,17 @@ class MatchingController extends Controller
     $matches = $query->with(['user_images' => function ($query) {
         $query->select('id', 'user_id', 'image_path', 'is_profile_picture');
     }])
-    ->select('users.*', 'user_profiles.*')
-    ->distinct()
-    ->get();
+        ->select('users.*', 'user_profiles.*')
+        ->distinct()
+        ->get();
 
     $matches->transform(function ($match) use ($viewerId) {
-        $match['already_followed'] = Follow::where('follower_id', $viewerId)
+        $followRequest = Follow::where('follower_id', $viewerId)
             ->where('followed_id', $match->user_id)
-            ->where('status', 'accepted')
-            ->exists();
+            ->first();
+
+        $match['already_followed'] = $followRequest && $followRequest->status === 'accepted';
+        $match['follow_request_status'] = $followRequest ? $followRequest->status : null;
 
         $match['already_liked'] = Like::where('user_id', $viewerId)
             ->where('liked_user_id', $match->user_id)
@@ -81,6 +83,7 @@ class MatchingController extends Controller
 
         $match['images'] = $match->user_images;
         unset($match->user_images);
+
         return $match;
     });
 
@@ -89,15 +92,12 @@ class MatchingController extends Controller
         'matches' => $matches,
         'status' => 200,
     ], 200);
-    
+
     }
 
-    
 
+    public function like_user(Request $request){
 
-
-    public function like_user(Request $request)
-{
     $validator = Validator::make($request->all(), [
         'user_id' => 'required|exists:users,id',
         'liked_user_id' => 'required|exists:users,id',
@@ -115,10 +115,11 @@ class MatchingController extends Controller
                         ->first();
 
     if ($existingLike) {
+        $existingLike->delete();
         return response()->json([
-            'message' => 'You have already liked this user.',
-            'status' => '401',
-        ], 401);
+            'message' => 'Like removed successfully.',
+            'status' => 200,
+        ], 200);
     }
 
     Like::create([
@@ -136,7 +137,7 @@ class MatchingController extends Controller
     public function get_liked_profiles(Request $request){
 
     $validator = Validator::make($request->all(), [
-        'user_id' => 'required|exists:users,id', // Validate user ID
+        'user_id' => 'required|exists:users,id',
     ]);
 
     if ($validator->fails()) {
@@ -166,11 +167,5 @@ class MatchingController extends Controller
     ]);
 
     }
-
-
-
-
-
-
 
 }

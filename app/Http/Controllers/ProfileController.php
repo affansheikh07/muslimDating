@@ -211,16 +211,16 @@ class ProfileController extends Controller
     $profiles = Cache::remember($cacheKey, 3600, function () use ($request) {
         $query = User_profile::query()
             ->select([
-                'user_id', 'age', 'location', 'gender', 'interests', 'bio', 
-                'ethnicity', 'height', 'martial_status', 'children', 'education', 
+                'user_id', 'age', 'location', 'gender', 'interests', 'bio',
+                'ethnicity', 'height', 'martial_status', 'children', 'education',
                 'profession', 'religion', 'religious_sector', 'personality'
             ])
-            ->with(['user:id,first_name', 'user.images:id,user_id,image_path,is_profile_picture']);
+            ->with(['user:id,first_name,profile_visibility', 'user.images:id,user_id,image_path,is_profile_picture']);
 
         if ($request->has('age_min') && $request->has('age_max')) {
             $query->whereBetween('age', [$request->age_min, $request->age_max]);
         } else {
-            return collect([]); // Return an empty collection if no age range is provided
+            return collect([]);
         }
 
         $filters = [
@@ -241,21 +241,25 @@ class ProfileController extends Controller
 
     $profiles->getCollection()->transform(function ($profile) use ($viewerId) {
         if (isset($profile->user)) {
-            // Add already_followed and already_liked attributes
-            $alreadyFollowed = DB::table('follows')
+            $followData = DB::table('follows')
+                ->select('status')
                 ->where('follower_id', $viewerId)
                 ->where('followed_id', $profile->user_id)
-                ->exists();
+                ->first();
+
+            $alreadyFollowed = $followData && $followData->status === 'accepted';
+            $followRequestStatus = $followData->status ?? null;
 
             $alreadyLiked = DB::table('likes')
                 ->where('user_id', $viewerId)
                 ->where('liked_user_id', $profile->user_id)
                 ->exists();
 
-            // Merge user data into profile and add attributes
             $profile = array_merge($profile->toArray(), $profile->user->toArray());
             $profile['already_followed'] = $alreadyFollowed;
+            $profile['follow_request_status'] = $followRequestStatus;
             $profile['already_liked'] = $alreadyLiked;
+            $profile['profile_visibility'] = $profile['user']['profile_visibility'] ?? null;
 
             unset($profile['user']);
         }
@@ -267,8 +271,9 @@ class ProfileController extends Controller
         'status' => 200,
         'data' => $profiles,
     ]);
-
+    
     }
+
 
 
 

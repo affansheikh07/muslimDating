@@ -92,7 +92,7 @@ class UserController extends Controller
     }
 
     public function fetch_user_by_id(Request $request, $id){
-    
+
     $viewerId = auth()->id();
 
     $user = User::with(['profile', 'images'])->find($id);
@@ -104,18 +104,13 @@ class UserController extends Controller
         ], 401);
     }
 
-    if ($user->profile_visibility === 'private' && $user->id !== $viewerId) {
-
-        return response()->json([
-            'message' => 'This profile is private.',
-            'status' => 401,
-        ], 401);
-    }
-
-    $alreadyFollowed = DB::table('follows')
+    $followData = DB::table('follows')
         ->where('follower_id', $viewerId)
         ->where('followed_id', $id)
-        ->exists();
+        ->first();
+
+    $alreadyFollowed = $followData && $followData->status === 'accepted'; 
+    $followRequestStatus = $followData ? $followData->status : null;
 
     $alreadyLiked = DB::table('likes')
         ->where('user_id', $viewerId)
@@ -125,7 +120,9 @@ class UserController extends Controller
     $profile = $user->profile;
     if ($profile) {
         $profile->first_name = $user->first_name;
+        $profile->profile_visibility = $user->profile_visibility;
         $profile->already_followed = $alreadyFollowed;
+        $profile->follow_request_status = $followRequestStatus;
         $profile->already_liked = $alreadyLiked;
     }
 
@@ -136,20 +133,33 @@ class UserController extends Controller
         ],
         'status' => 200,
     ]);
-
+    
     }
+
 
     public function update_profile_visibility(Request $request){
 
     $user = auth()->user();
-    
+
     $request->validate([
         'profile_visibility' => 'required|in:public,private',
     ]);
-    
-    $user->profile_visibility = $request->profile_visibility;
+
+    $previousVisibility = $user->profile_visibility;
+    $newVisibility = $request->profile_visibility;
+
+    $user->profile_visibility = $newVisibility;
     $user->save();
-    
+
+    // If the profile visibility is updated to "public" and it was previously "private",
+    // update all pending follow requests to "accepted"
+    if ($previousVisibility === 'private' && $newVisibility === 'public') {
+        DB::table('follows')
+            ->where('followed_id', $user->id)
+            ->where('status', 'pending')
+            ->update(['status' => 'accepted']);
+    }
+
     return response()->json([
         'message' => 'Profile visibility updated successfully.',
         'status' => 200,
@@ -157,6 +167,7 @@ class UserController extends Controller
     ]);
 
     }
+
 
     public function report_user(Request $request){
 
