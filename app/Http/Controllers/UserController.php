@@ -151,8 +151,6 @@ class UserController extends Controller
     $user->profile_visibility = $newVisibility;
     $user->save();
 
-    // If the profile visibility is updated to "public" and it was previously "private",
-    // update all pending follow requests to "accepted"
     if ($previousVisibility === 'private' && $newVisibility === 'public') {
         DB::table('follows')
             ->where('followed_id', $user->id)
