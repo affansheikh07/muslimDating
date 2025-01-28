@@ -130,6 +130,37 @@ class ProfileController extends Controller
 
     }
 
+    public function get_user_profile(Request $request){
+        
+    $validator = Validator::make($request->all(), [
+        'user_id' => 'required|exists:users,id',
+    ]);
+
+    if ($validator->fails()) {
+        return response()->json([
+            'errors' => $validator->errors()->first(),
+            'status' => 401,
+        ], 401);
+    }
+
+    $profile = User_profile::where('user_id', $request->user_id)->first();
+
+    if ($profile) {
+        return response()->json([
+            'message' => 'User profile retrieved successfully.',
+            'data' => $profile,
+            'status' => 200,
+        ], 200);
+    }
+
+    return response()->json([
+        'message' => 'User profile does not exist.',
+        'status' => 401,
+    ], 401);
+
+    }
+
+
     public function upload_user_images(Request $request){
 
     $validator = Validator::make($request->all(), [

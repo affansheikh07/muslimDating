@@ -136,30 +136,45 @@ class MatchingController extends Controller
 
     public function get_liked_profiles(Request $request){
 
-    $validator = Validator::make($request->all(), [
-        'user_id' => 'required|exists:users,id',
-    ]);
+    $viewerId = auth()->id();
 
-    if ($validator->fails()) {
-        return response()->json([
-            'errors' => $validator->errors()->first(),
-            'status' => 401,
-        ], 401);
-    }
-
-    $likedProfiles = Like::with('likedUser.profile', 'likedUser.images')
-        ->where('user_id', $request->user_id)
+    $likedProfiles = Like::with(['likedUser.profile', 'likedUser.images'])
+        ->where('user_id', $viewerId)
         ->get()
-        ->map(function ($like) {
+        ->map(function ($like) use ($viewerId) {
+            $likedUser = $like->likedUser;
+
+            if (!$likedUser) {
+                return null;
+            }
+
+            $followRequest = Follow::where('follower_id', $viewerId)
+                ->where('followed_id', $likedUser->id)
+                ->first();
+
             return [
-                'liked_user' => [
-                    'id' => $like->liked_user_id,
-                    'first_name' => $like->likedUser->first_name,
-                    'profile' => $like->likedUser->profile,
-                    'images' => $like->likedUser->images,
-                ],
+                'id' => $likedUser->id,
+                'first_name' => $likedUser->first_name,
+                'email' => $likedUser->email,
+                'phone_no' => $likedUser->phone_no,
+                'status' => $likedUser->status,
+                'profile_visibility' => $likedUser->profile_visibility,
+                'email_verified_at' => $likedUser->email_verified_at,
+                'created_at' => $likedUser->created_at,
+                'updated_at' => $likedUser->updated_at,
+                ...optional($likedUser->profile)->toArray() ?? [],
+                'already_followed' => $followRequest && $followRequest->status === 'accepted',
+                'follow_request_status' => $followRequest->status ?? 'none',
+                'images' => $likedUser->images->map(fn($image) => [
+                    'id' => $image->id,
+                    'user_id' => $image->user_id,
+                    'image_path' => $image->image_path,
+                    'is_profile_picture' => $image->is_profile_picture,
+                ]),
             ];
-        });
+        })
+        ->filter() 
+        ->values();
 
     return response()->json([
         'liked_profiles' => $likedProfiles,

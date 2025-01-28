@@ -1,6 +1,8 @@
 <?php
 
 use Illuminate\Support\Facades\Route;
+use App\Http\Controllers\UserController;
+
 
 /*
 |--------------------------------------------------------------------------
@@ -16,3 +18,5 @@ use Illuminate\Support\Facades\Route;
 Route::get('/', function () {
     return view('welcome');
 });
+// Show the password reset form (optional step, but useful for users to reset password through a UI)
+Route::get('password/reset/{token}', [UserController::class, 'showResetForm'])->name('password.reset');

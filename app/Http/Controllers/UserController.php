@@ -9,6 +9,7 @@ use App\Models\Block;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Validator;
 use Tymon\JWTAuth\Facades\JWTAuth;
+use Illuminate\Support\Facades\Password;
 use DB;
 
 class UserController extends Controller
@@ -91,6 +92,116 @@ class UserController extends Controller
 
     }
 
+    public function change_password(Request $request){
+
+    $user = auth()->user();
+
+    $validator = Validator::make($request->all(), [
+        'current_password' => 'required',
+        'new_password' => 'required|min:7|confirmed',
+    ]);
+
+    if ($validator->fails()) {
+        return response()->json([
+            'errors' => $validator->errors()->first(),
+            'status' => 401,
+        ], 401);
+    }
+
+    if (!Hash::check($request->current_password, $user->password)) {
+        return response()->json([
+            'message' => 'Current password is incorrect.',
+            'status' => 401,
+        ], 401);
+    }
+
+    $user->password = Hash::make($request->new_password);
+    $user->save();
+
+    return response()->json([
+        'message' => 'Password changed successfully.',
+        'status' => 200,
+    ], 200);
+
+    }
+
+    public function forgot_password(Request $request){
+
+    $validator = Validator::make($request->all(), [
+        'email' => 'required|email|exists:users,email',
+    ]);
+
+    if ($validator->fails()) {
+        return response()->json([
+            'errors' => $validator->errors()->first(),
+            'status' => 401,
+        ], 401);
+    }
+
+    $response = Password::sendResetLink(
+        $request->only('email')
+    );
+
+    if ($response == Password::RESET_LINK_SENT) {
+        return response()->json([
+            'message' => 'Password reset link sent!',
+            'status' => 200,
+        ], 200);
+    } else {
+        return response()->json([
+            'message' => 'Unable to send reset link. Please try again later.',
+            'status' => 401,
+        ], 401);
+    }
+
+    }
+
+    public function reset_password(Request $request){
+
+    $validator = Validator::make($request->all(), [
+        'email' => 'required|email|exists:users,email',
+        'password' => 'required|confirmed|min:6',
+        'token' => 'required',
+    ]);
+
+    if ($validator->fails()) {
+        return response()->json([
+            'errors' => $validator->errors()->first(),
+            'status' => 401,
+        ], 401);
+    }
+
+    $response = Password::reset(
+        $request->only('email', 'password', 'password_confirmation', 'token'),
+        function ($user, $password) {
+            $user->password = bcrypt($password);
+            $user->save();
+        }
+    );
+
+    if ($response == Password::PASSWORD_RESET) {
+        return response()->json([
+            'message' => 'Password has been reset!',
+            'status' => 200,
+        ], 200);
+    } else {
+        return response()->json([
+            'message' => 'Invalid token or other issue with resetting the password.',
+            'status' => 401,
+        ], 401);
+    }
+
+    }
+
+    public function showResetForm($token){
+
+    return response()->json([
+        'message' => 'Please provide a new password using the provided token.',
+        'token' => $token
+    ]);
+
+    }
+
     public function fetch_user_by_id(Request $request, $id){
 
     $viewerId = auth()->id();
@@ -135,8 +246,6 @@ class UserController extends Controller
     ]);
     
     }
-
-
     public function update_profile_visibility(Request $request){
 
     $user = auth()->user();
